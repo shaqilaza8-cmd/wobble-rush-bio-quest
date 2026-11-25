@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wobble Rush: Bio Quest</title>
+<style>
+:root{--pink:#ff77b7;--purple:#7867ff;--ink:#26304b;--mint:#7ee7c1}
+*{box-sizing:border-box}body{margin:0;background:#171d35;color:white;font-family:system-ui,Segoe UI,sans-serif}
+#game{display:block;width:100vw;height:100vh}
+#hud{position:fixed;inset:12px 14px auto;display:flex;justify-content:space-between;gap:10px;pointer-events:none;z-index:3}
+.pill{background:#10172bdc;border:1px solid #ffffff30;border-radius:14px;padding:9px 13px;font-weight:800;box-shadow:0 5px 18px #0003}
+#hint{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);background:#10172be8;padding:10px 16px;border-radius:14px;text-align:center;font-size:13px;z-index:3;max-width:94vw}
+.panel{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#10172bd9;z-index:5;padding:18px}
+.card{width:min(720px,96vw);max-height:92vh;overflow:auto;background:linear-gradient(145deg,#29365f,#1b2443);border:2px solid #ffffff30;border-radius:25px;padding:24px;box-shadow:0 20px 80px #0008}
+h1{margin:0 0 8px;font-size:clamp(27px,5vw,46px);line-height:1.05}h2{margin:0 0 10px}p{color:#e0e7ff;line-height:1.5}
+button,select{font:inherit;border:0;border-radius:13px;padding:11px 16px;font-weight:800;cursor:pointer}
+button{background:linear-gradient(135deg,#ff80bd,#ffb26f);color:#241d3b;margin:5px}
+button.secondary{background:#ffffff20;color:white;border:1px solid #ffffff40}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.choice{background:#ffffff12;border:1px solid #ffffff30;border-radius:16px;padding:12px;margin:8px 0}
+.choice label{font-weight:700}.muted{font-size:13px;color:#bac8ee}
+#quizAnswers button{display:block;width:100%;text-align:left;background:#ffffff16;color:white;border:1px solid #ffffff30;margin:8px 0}
+#quizAnswers button:hover{background:#ffffff2b}
+#feedback{font-weight:800;min-height:28px}
+.swatch{width:30px;height:30px;border-radius:50%;border:3px solid white;display:inline-block;vertical-align:middle;cursor:pointer;margin:4px}
+@media(max-width:600px){.card{padding:18px}#hint{font-size:11px}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud"><div class="pill" id="missionHud">Misi 1/10</div><div class="pill" id="keyHud">🔑 Kunci: 0/1</div><div class="pill" id="scoreHud">⭐ 0</div></div>
+<div id="hint">WASD / tombol panah untuk bergerak · SPACE untuk lompat · capai garis finish!</div>
+<div class="panel" id="menu"><div class="card">
+<h1>WOBBLE RUSH<br><span style="color:#ff9acb">BIO QUEST</span></h1>
+<p>Petualangan 10 misi di lokasi berbeda! Lewati rintangan, capai garis finish, ambil kunci, lalu jawab soal Biologi kelas 9 tentang sistem reproduksi manusia dan kesehatan reproduksi. Materinya edukatif dan sesuai pembelajaran sekolah.</p>
+<div class="choice"><label>Karakter</label><div class="row">
+<select id="gender"><option value="girl">Cewek</option><option value="boy">Cowok</option></select>
+<select id="hair"><option value="long">Rambut panjang</option><option value="short">Rambut pendek</option><option value="curly">Rambut keriting</option><option value="ponytail">Kuncir</option></select>
+</div><div class="muted">Pilih warna rambut:</div><div id="hairColors">
+<span class="swatch" data-color="#302018" style="background:#302018"></span><span class="swatch" data-color="#8b4a22" style="background:#8b4a22"></span><span class="swatch" data-color="#f0c45b" style="background:#f0c45b"></span><span class="swatch" data-color="#d94f82" style="background:#d94f82"></span><span class="swatch" data-color="#6b5bd6" style="background:#6b5bd6"></span>
+</div><div class="muted">Pilih warna pakaian:</div><div id="outfitColors">
+<span class="swatch" data-color="#ff6fae" style="background:#ff6fae"></span><span class="swatch" data-color="#55c9ff" style="background:#55c9ff"></span><span class="swatch" data-color="#7cde9b" style="background:#7cde9b"></span><span class="swatch" data-color="#ffb34e" style="background:#ffb34e"></span><span class="swatch" data-color="#aa8cff" style="background:#aa8cff"></span>
+</div></div>
+<div class="row"><button id="start">MULAI PETUALANGAN</button><button class="secondary" id="how">CARA BERMAIN</button></div>
+<p class="muted">Catatan: ini game single-player. Sepuluh misi dapat dimainkan berurutan dan progres berlangsung di browser.</p>
+</div></div>
+<div class="panel" id="quiz" style="display:none"><div class="card">
+<div class="muted" id="quizLocation">MISI</div><h2 id="quizTitle">Kuis Biologi</h2><p id="question"></p><div id="quizAnswers"></div><div id="feedback"></div><button id="continue" style="display:none">LANJUTKAN MISI</button>
+</div></div>
+<div class="panel" id="result" style="display:none"><div class="card"><h1 id="resultTitle">Misi selesai!</h1><p id="resultText"></p><button id="nextMission">MISI BERIKUTNYA</button></div></div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const missions=[
+{name:'PANTAI CERIA',place:'Pantai Ceria',theme:0x55c9df,kind:'beach',q:'Organ reproduksi perempuan yang menjadi tempat berkembangnya janin selama kehamilan adalah …',a:['Ovarium','Rahim (uterus)','Tuba falopi','Vagina'],c:1,why:'Rahim atau uterus adalah tempat embrio berkembang menjadi janin.'},
+{name:'KOLAM RENANG',place:'Kolam Renang',theme:0x49b9e8,kind:'pool',q:'Organ yang menghasilkan sel telur (ovum) adalah …',a:['Ovarium','Uterus','Serviks','Vagina'],c:0,why:'Ovarium menghasilkan ovum serta hormon estrogen dan progesteron.'},
+{name:'AIR TERJUN PELANGI',place:'Air Terjun Pelangi',theme:0x60c9b0,kind:'waterfall',q:'Organ reproduksi laki-laki yang menghasilkan sperma adalah …',a:['Penis','Testis','Vas deferens','Prostat'],c:1,why:'Testis menghasilkan sel sperma dan hormon testosteron.'},
+{name:'TAMAN TRAMPOLIN',place:'Taman Trampolin',theme:0xa58be9,kind:'bounce',q:'Pelepasan sel telur matang dari ovarium disebut …',a:['Menstruasi','Fertilisasi','Ovulasi','Implantasi'],c:2,why:'Ovulasi adalah pelepasan ovum matang dari ovarium.'},
+{name:'GUNUNG ES',place:'Gunung Es',theme:0x9ac9ef,kind:'ice',q:'Menstruasi terjadi ketika …',a:['Lapisan dinding rahim meluruh','Ovum berubah menjadi sperma','Testis menghasilkan hormon','Janin mulai tumbuh'],c:0,why:'Jika tidak terjadi kehamilan, lapisan dinding rahim meluruh.'},
+{name:'KOTA ROBOT',place:'Kota Robot',theme:0x8878e9,kind:'robot',q:'Pembuahan (fertilisasi) pada manusia umumnya terjadi di …',a:['Rahim','Ovarium','Tuba falopi','Vagina'],c:2,why:'Fertilisasi umumnya terjadi di tuba falopi.'},
+{name:'HUTAN JAMUR',place:'Hutan Jamur',theme:0x80bd78,kind:'forest',q:'Hormon yang berperan dalam perkembangan ciri kelamin sekunder perempuan adalah …',a:['Adrenalin','Estrogen','Insulin','Melatonin'],c:1,why:'Estrogen berperan dalam perkembangan ciri kelamin sekunder perempuan.'},
+{name:'KAPAL BAJA',place:'Kapal Baja',theme:0xe3a65e,kind:'ship',q:'Salah satu cara menjaga kesehatan organ reproduksi adalah …',a:['Mengabaikan kebersihan','Memakai pakaian lembap seharian','Menjaga kebersihan dan mengganti pakaian dalam secara teratur','Berbagi handuk pribadi'],c:2,why:'Menjaga kebersihan dan memakai pakaian bersih membantu menjaga kesehatan.'},
+{name:'KUIL LANGIT',place:'Kuil Langit',theme:0x6caddd,kind:'sky',q:'Saluran yang membawa sperma dari epididimis menuju uretra adalah …',a:['Vas deferens','Tuba falopi','Ureter','Serviks'],c:0,why:'Vas deferens mengangkut sperma dari epididimis.'},
+{name:'ARENA FINAL',place:'Arena Final',theme:0xe8a45d,kind:'final',q:'Jika mengalami keluhan pada organ reproduksi, tindakan yang tepat adalah …',a:['Mencari diagnosis dari rumor','Diam saja walau keluhan berlanjut','Berkonsultasi dengan tenaga kesehatan tepercaya','Mencoba obat sembarangan'],c:2,why:'Tenaga kesehatan dapat memberi informasi dan pemeriksaan yang tepat.'}
+];
+let scene,camera,renderer,player,clock,keys={},running=false,mission=0,score=0,hasKey=false,quizDone=false;
+let obstacles=[],coins=[],keyMesh,finish,ground,character={gender:'girl',hair:'long',hairColor:'#302018',outfit:'#ff6fae'};
+const canvas=document.querySelector('#game');
+const menu=document.querySelector('#menu'),quiz=document.querySelector('#quiz'),result=document.querySelector('#result');
+function makeMat(color){return new THREE.MeshStandardMaterial({color,roughness:.72});}
+function box(w,h,d,color,x,y,z){let m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),makeMat(color));m.position.set(x,y,z);scene.add(m);return m;}
+function buildCharacter(){
+ if(player)scene.remove(player);
+ player=new THREE.Group();
+ const skin=makeMat(0xffd0ad),cloth=makeMat(character.outfit),hair=makeMat(character.hairColor),dark=makeMat(0x342a35),white=makeMat(0xffffff);
+ const body=new THREE.Mesh(new THREE.CapsuleGeometry(.38,.55,5,10),cloth);body.position.y=1.0;player.add(body);
+ const head=new THREE.Mesh(new THREE.SphereGeometry(.34,18,14),skin);head.position.y=1.72;player.add(head);
+ const hairCap=new THREE.Mesh(new THREE.SphereGeometry(.365,18,12,0,Math.PI*2,0,Math.PI*.62),hair);hairCap.position.y=1.79;player.add(hairCap);
+ if(character.hair==='long'||character.hair==='ponytail'||character.hair==='curly'){
+   let side=new THREE.Mesh(new THREE.BoxGeometry(.16,.55,.28),hair);side.position.set(-.29,1.48,0);player.add(side);
+   let side2=side.clone();side2.position.x=.29;player.add(side2);
+ }
+ if(character.hair==='ponytail'){let tail=new THREE.Mesh(new THREE.CapsuleGeometry(.09,.38,4,8),hair);tail.position.set(-.35,1.55,-.15);tail.rotation.z=-.45;player.add(tail);}
+ if(character.hair==='curly'){for(let i=0;i<5;i++){let curl=new THREE.Mesh(new THREE.SphereGeometry(.13,10,8),hair);curl.position.set((i-2)*.12,1.98,-.12);player.add(curl);}}
+ for(let x of [-.12,.12]){let eye=new THREE.Mesh(new THREE.SphereGeometry(.045,8,8),dark);eye.position.set(x,1.76,.30);player.add(eye);}
+ const legs=new THREE.Mesh(new THREE.BoxGeometry(.42,.35,.3),dark);legs.position.y=.38;player.add(legs);
+ player.position.set(0,0,7);scene.add(player);
+}
+function clearWorld(){for(let o of [...obstacles,...coins])scene.remove(o);obstacles=[];coins=[];if(keyMesh)scene.remove(keyMesh);if(finish)scene.remove(finish);if(ground)scene.remove(ground);}
+function init(){
+ scene=new THREE.Scene();scene.background=new THREE.Color(0x9bdcf4);scene.fog=new THREE.Fog(0x9bdcf4,25,65);
+ camera=new THREE.PerspectiveCamera(65,innerWidth/innerHeight,.1,100);camera.position.set(0,7,13);
+ renderer=new THREE.WebGLRenderer({canvas,antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;
+ scene.add(new THREE.HemisphereLight(0xffffff,0x65708c,2));
+ const sun=new THREE.DirectionalLight(0xffffff,2);sun.position.set(-5,12,8);scene.add(sun);
+ clock=new THREE.Clock();loadMission();animate();
+}
+function loadMission(){
+ clearWorld();
+ let data=missions[mission],level=mission+1,difficulty=1+mission*.18;
+ scene.background=new THREE.Color(data.theme);scene.fog=new THREE.Fog(data.theme,25,68);
+ ground=box(15,.5,76,0xe8f0ff,0,0,-22);ground.position.y=-.3;
+ // Dekorasi khusus setiap lokasi
+ const decoColors=[0xffd166,0xff8fab,0x9bdeac,0x9ad6ff,0xb79cff];
+ for(let i=0;i<18;i++){
+   let x=(i%2?1:-1)*(8.5+Math.random()*3),z=10-i*4.2,h=1.5+Math.random()*4;
+   let color=decoColors[i%decoColors.length];
+   if(data.kind==='beach'||data.kind==='pool'){box(1.5,.25,1.5,0xffe0a3,x,.05,z);box(.35,1.2,.35,0xffa65c,x,.8,z);}
+   else if(data.kind==='ice'){let crystal=box(.8,h,.8,0xd9f4ff,x,h/2-.2,z);crystal.rotation.z=.2;}
+   else if(data.kind==='forest'){let trunk=box(.45,2,.45,0x805438,x,.8,z);let crown=new THREE.Mesh(new THREE.SphereGeometry(1.1,10,8),makeMat(0x5ab66d));crown.position.set(x,2,z);scene.add(crown);}
+   else if(data.kind==='ship'){box(1.2,.4,1.2,0x805438,x,.2,z);box(.2,2,.2,0xffffff,x,1.2,z);}
+   else {box(1.1,h,1.1,color,x,h/2-.2,z);}
+ }
+ // Masing-masing arena punya pola rintangan; jarak dan kecepatan makin menantang.
+ const count=7+mission;
+ for(let i=0;i<count;i++){
+   let z=-i*(6.4- Math.min(mission*.22,1.7))-2;
+   let lane=(i%2?1:-1)*(1.8+(mission%3)*.25);
+   let o;
+   if(data.kind==='beach'){
+     o=box(2.2,.65,1.25,i%2?0xff9d55:0xf4d28a,lane,.45,z);o.userData.move='sway';
+   }else if(data.kind==='pool'){
+     o=box(2.3,.35,2.1,0x37a9d5,lane,.2,z);o.userData.move='float';
+   }else if(data.kind==='waterfall'){
+     o=box(3.2,.55,.7,0x58e0d0,lane,.4,z);o.userData.move='sway';
+   }else if(data.kind==='bounce'){
+     o=box(1.8,.4,1.8,0xff75bb,lane,.25,z);o.userData.move='bounce';
+   }else if(data.kind==='ice'){
+     o=box(2.7,.8,.8,0xa8e7ff,lane,.5,z);o.userData.move='slide';
+   }else if(data.kind==='robot'){
+     o=box(1.2,1.8,1.2,0x8175e8,lane,.9,z);o.userData.move='sway';
+   }else if(data.kind==='forest'){
+     o=box(2.8,.65,.7,0x8d5a3b,lane,.45,z);o.userData.move='sway';
+   }else if(data.kind==='ship'){
+     o=box(2.1,1.3,.8,0xd18a4b,lane,.65,z);o.userData.move='slide';
+   }else if(data.kind==='sky'){
+     o=box(2.4,.45,1.6,0x9be4ff,lane,.3,z);o.userData.move='float';
+   }else{
+     o=box(1.25,2.2,1.2,0xff6f86,lane,1.1,z);o.userData.move='sway';
+   }
+   o.userData.baseX=lane;o.userData.phase=i*.8;o.userData.speed=difficulty;
+   obstacles.push(o);
+   let coin=new THREE.Mesh(new THREE.TorusGeometry(.34,.11,8,16),makeMat(0xffd43b));
+   coin.position.set(-lane*.8,1.2,z-2);scene.add(coin);coins.push(coin);
+ }
+ // Lompatan batu pijakan di kolam dan pantai
+ if(data.kind==='pool'||data.kind==='beach'||data.kind==='sky'){
+   for(let i=0;i<5;i++){let step=box(1.5,.25,1.5,data.kind==='pool'?0x4bc7e8:0xf4d28a,(i%2?2:-2),-.02,-8-i*8);step.userData.step=true;}
+ }
+ finish=box(9,.18,.6,0x2d294e,0,0,-58);
+ for(let i=0;i<8;i++)box(.95,.2,.62,i%2?0xffffff:0xffd64d,-3.5+i,-.08,-58.1);
+ keyMesh=new THREE.Group();
+ let ring=new THREE.Mesh(new THREE.TorusGeometry(.34,.1,10,24),makeMat(0xffd43b));keyMesh.add(ring);
+ let stem=new THREE.Mesh(new THREE.BoxGeometry(.12,.65,.12),makeMat(0xffd43b));stem.position.y=-.35;keyMesh.add(stem);
+ keyMesh.position.set(0,1.25,-54);scene.add(keyMesh);
+ buildCharacter();player.position.z=8;hasKey=false;quizDone=false;
+ document.querySelector('#missionHud').textContent=`Misi ${mission+1}/10 · ${data.name} · Level ${level}`;
+ document.querySelector('#keyHud').textContent='🔑 Kunci: 0/1';
+ document.querySelector('#scoreHud').textContent='⭐ '+score;
+ document.querySelector('#hint').textContent=`${data.place}: rintangan level ${level}/10 · WASD bergerak · SPACE melompat · capai finish!`;
+}
+function showQuiz(){
+ running=false;quiz.style.display='flex';document.querySelector('#quizLocation').textContent=`${missions[mission].place} · Kunci ditemukan!`;
+ document.querySelector('#quizTitle').textContent='Tantangan Biologi';document.querySelector('#question').textContent=missions[mission].q;
+ const area=document.querySelector('#quizAnswers');area.innerHTML='';document.querySelector('#feedback').textContent='';document.querySelector('#continue').style.display='none';
+ missions[mission].a.forEach((answer,i)=>{let b=document.createElement('button');b.textContent=String.fromCharCode(65+i)+'. '+answer;b.onclick=()=>answerQuiz(i);area.appendChild(b);});
+}
+function answerQuiz(i){
+ const q=missions[mission],area=document.querySelector('#quizAnswers');
+ [...area.children].forEach(b=>b.disabled=true);
+ if(i===q.c){score+=100;document.querySelector('#feedback').textContent='BENAR! +100 poin. '+q.why;document.querySelector('#feedback').style.color='#86f5c2';}
+ else{document.querySelector('#feedback').textContent='Belum tepat. Jawaban: '+q.a[q.c]+'. '+q.why;document.querySelector('#feedback').style.color='#ffd28c';}
+ quizDone=true;document.querySelector('#scoreHud').textContent='⭐ '+score;document.querySelector('#continue').style.display='inline-block';
+}
+function finishMission(){
+ quiz.style.display='none';result.style.display='flex';
+ document.querySelector('#resultTitle').textContent=mission===9?'KAMU MENJADI JUARA BIO QUEST!':'MISI '+(mission+1)+' SELESAI!';
+ document.querySelector('#resultText').textContent=`Kamu berhasil melewati ${missions[mission].place}, mengambil kunci, dan menyelesaikan soal. Total poin: ${score}.`;
+ document.querySelector('#nextMission').textContent=mission===9?'KEMBALI KE MENU':'LANJUT KE MISI BERIKUTNYA';
+}
+function start(){menu.style.display='none';result.style.display='none';quiz.style.display='none';mission=0;score=0;loadMission();running=true;}
+document.querySelector('#start').onclick=()=>{character.gender=document.querySelector('#gender').value;character.hair=document.querySelector('#hair').value;start();};
+document.querySelector('#how').onclick=()=>alert('Gerakkan karakter dengan WASD atau tombol panah. Tekan SPACE untuk melompat. Hindari balok rintangan, capai garis finish, lalu sentuh kunci emas dan jawab soal Biologi.');
+document.querySelector('#continue').onclick=finishMission;
+document.querySelector('#nextMission').onclick=()=>{result.style.display='none';if(mission===9){menu.style.display='flex';return;}mission++;loadMission();running=true;};
+document.querySelectorAll('#hairColors .swatch').forEach(el=>el.onclick=()=>{character.hairColor=el.dataset.color;document.querySelectorAll('#hairColors .swatch').forEach(x=>x.style.outline='none');el.style.outline='3px solid #fff';});
+document.querySelectorAll('#outfitColors .swatch').forEach(el=>el.onclick=()=>{character.outfit=el.dataset.color;document.querySelectorAll('#outfitColors .swatch').forEach(x=>x.style.outline='none');el.style.outline='3px solid #fff';});
+addEventListener('keydown',e=>{keys[e.code]=true;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault();});
+addEventListener('keyup',e=>keys[e.code]=false);
+function animate(){
+ requestAnimationFrame(animate);let dt=Math.min(clock.getDelta(),.04);
+ if(running&&player){
+  let dx=0,dz=0;if(keys.KeyA||keys.ArrowLeft)dx-=1;if(keys.KeyD||keys.ArrowRight)dx+=1;if(keys.KeyW||keys.ArrowUp)dz-=1;if(keys.KeyS||keys.ArrowDown)dz+=1;
+  player.position.x+=dx*dt*8;player.position.z+=dz*dt*8;player.position.x=Math.max(-5.8,Math.min(5.8,player.position.x));
+  if(keys.Space&&player.position.y<.05){player.userData.vy=7.5;}player.userData.vy=(player.userData.vy||0)-20*dt;player.position.y+=player.userData.vy*dt;if(player.position.y<0){player.position.y=0;player.userData.vy=0;}
+  obstacles.forEach(o=>{
+   let t=performance.now()*.001*(1+mission*.12)+o.userData.phase;
+   if(o.userData.move==='sway')o.position.x=o.userData.baseX+Math.sin(t*1.5)*(.8+mission*.08);
+   else if(o.userData.move==='slide')o.position.x=o.userData.baseX+Math.sin(t*2.2)*(1.1+mission*.07);
+   else if(o.userData.move==='float')o.position.y=.25+Math.sin(t*2)*.22;
+   else if(o.userData.move==='bounce')o.position.y=.25+Math.abs(Math.sin(t*2.4))*.5;
+   o.rotation.y+=dt*(1.2+mission*.12);
+   if(Math.abs(player.position.z-o.position.z)<1.0&&Math.abs(player.position.x-o.position.x)<1.25&&player.position.y<.9){
+     player.position.z=Math.min(player.position.z+dt*(8+mission*.35),8);
+   }
+ });
+  coins.forEach((c,i)=>{c.rotation.y+=dt*2;if(!c.userData.got&&player.position.distanceTo(c.position)<1.25){c.userData.got=true;c.visible=false;score+=10;document.querySelector('#scoreHud').textContent='⭐ '+score;}});
+  if(player.position.z<-52&&!hasKey){hasKey=true;keyMesh.visible=false;document.querySelector('#keyHud').textContent='🔑 Kunci: 1/1';}
+  if(player.position.z<-57&&hasKey){showQuiz();}
+  camera.position.x+=(player.position.x*.35-camera.position.x)*dt*3;camera.position.y+=(player.position.y+6.5-camera.position.y)*dt*3;camera.position.z+=(player.position.z+12-camera.position.z)*dt*3;camera.lookAt(player.position.x,1,player.position.z-5);
+ }
+ if(keyMesh)keyMesh.rotation.y+=dt*1.5;
+ renderer.render(scene,camera);
+}
+addEventListener('resize',()=>{if(!camera)return;camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+init();
+</script></body></html>
